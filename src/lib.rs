@@ -1,12 +1,12 @@
 #![feature(async_await)]
 
-use futures::future::{BoxFuture, FutureExt};
+use futures::future::BoxFuture;
 use std::collections::HashSet;
+use tide::http::header::{self, HeaderMap, HeaderValue};
 use tide::http::StatusCode;
-use tide::http::header::{self, HeaderMap};
-use tide::{Context, Response};
-use tide::response::IntoResponse;
 use tide::middleware::{Middleware, Next};
+use tide::response::IntoResponse;
+use tide::{Context, Response};
 
 
 #[derive(Debug)]
@@ -28,26 +28,26 @@ pub struct Cors {
 
 impl Cors {
     pub fn allow_origin(&mut self, origin: &'static str) -> &mut Self {
-        if let None = self.origins {
+        if self.origins.is_none() {
             self.origins = Some(HashSet::new());
         }
         self.origins.as_mut().unwrap().insert(origin);
         self
     }
-    fn validate_origin(&self, headers: &HeaderMap) -> Result<(), Error> {
+    fn validate_origin(&self, headers: &HeaderMap) -> Result<HeaderValue, Error> {
         if let Some(origins) = &self.origins {
-            let origin = headers
-                .get(header::ORIGIN)
+            let value = headers.get(header::ORIGIN);
+            let origin = value
                 .and_then(|hdr| hdr.to_str().ok())
                 .ok_or(Error::MissingOrigin)?;
 
             if origins.contains(origin) {
-                Ok(())
+                Ok(HeaderValue::from(value.unwrap()))
             } else {
                 Err(Error::OriginNotAllowed)
             }
         } else {
-            Ok(())
+            Ok(HeaderValue::from_str("*").unwrap())
         }
     }
 }
@@ -55,8 +55,12 @@ impl Cors {
 impl<Data: 'static + Send + Sync> Middleware<Data> for Cors {
     fn handle<'a>(&'a self, cx: Context<Data>, next: Next<'a, Data>) -> BoxFuture<'a, Response> {
         match self.validate_origin(cx.request().headers()) {
-            Ok(()) => next.run(cx),
-            Err(e) => FutureExt::boxed(async { e.into_response() }),
+            Ok(origin) => Box::pin(async {
+                let mut res = next.run(cx).await;
+                res.headers_mut().append(header::ACCESS_CONTROL_ALLOW_ORIGIN, origin);
+                res
+            }),
+            Err(e) => Box::pin(async { e.into_response() }),
         }
     }
 }
