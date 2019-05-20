@@ -10,3 +10,4 @@ edition = "2018"
 name = "tide_cors"
 
 [dependencies]
+tide = "0.2.0"
