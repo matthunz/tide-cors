@@ -23,6 +23,9 @@ use tide::middleware::{Middleware, Next};
 use tide::response::IntoResponse;
 use tide::{Context, Response};
 
+#[cfg(test)]
+mod tests;
+
 
 /// Set of errors that can occur during processing CORS
 #[derive(Debug)]
@@ -93,15 +96,5 @@ impl<Data: 'static + Send + Sync> Middleware<Data> for Cors {
             }),
             Err(e) => Box::pin(async { e.into_response() }),
         }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn it_works() {
-        let _cors = Cors::default().allow_origin("example.com");
     }
 }

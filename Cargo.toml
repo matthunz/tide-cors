@@ -12,3 +12,6 @@ name = "tide_cors"
 [dependencies]
 futures-preview = "0.3.0-alpha.16"
 tide = "0.2.0"
+
+[dev-dependencies]
+http-service = "0.2.0"
