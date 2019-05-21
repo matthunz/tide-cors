@@ -12,35 +12,22 @@
 //! );
 //! ```
 
-#![feature(async_await)]
 #![deny(missing_docs)]
 
-use futures::future::BoxFuture;
+use futures::future::{self, BoxFuture, FutureExt, TryFutureExt};
 use std::collections::HashSet;
+use tide::error::ResultExt;
 use tide::http::header::{self, HeaderMap, HeaderValue};
-use tide::http::StatusCode;
 use tide::middleware::{Middleware, Next};
 use tide::response::IntoResponse;
 use tide::{Context, Response};
 
+mod error;
+pub use error::Error;
+
 #[cfg(test)]
 mod tests;
 
-
-/// Set of errors that can occur during processing CORS
-#[derive(Debug)]
-pub enum Error {
-    /// The HTTP request header `Origin` is required but was not provided
-    MissingOrigin,
-    /// `Origin` is not allowed to make this request
-    OriginNotAllowed,
-}
-
-impl IntoResponse for Error {
-    fn into_response(self) -> Response {
-        ().with_status(StatusCode::FORBIDDEN).into_response()
-    }
-}
 
 /// CORS middleware struct
 ///
@@ -87,14 +74,16 @@ impl Cors {
 
 impl<Data: 'static + Send + Sync> Middleware<Data> for Cors {
     fn handle<'a>(&'a self, cx: Context<Data>, next: Next<'a, Data>) -> BoxFuture<'a, Response> {
-        match self.validate_origin(cx.request().headers()) {
-            Ok(origin) => Box::pin(async {
-                let mut res = next.run(cx).await;
-                res.headers_mut()
-                    .append(header::ACCESS_CONTROL_ALLOW_ORIGIN, origin);
-                res
-            }),
-            Err(e) => Box::pin(async { e.into_response() }),
-        }
+        Box::pin(
+            future::ready(self.validate_origin(cx.request().headers()))
+                .and_then(|origin| {
+                    next.run(cx).map(|mut res| {
+                        res.headers_mut()
+                            .append(header::ACCESS_CONTROL_ALLOW_ORIGIN, origin);
+                        Ok(res)
+                    })
+                })
+                .map(|res| res.with_err_status(403).into_response()),
+        )
     }
 }

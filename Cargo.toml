@@ -10,6 +10,7 @@ edition = "2018"
 name = "tide_cors"
 
 [dependencies]
+display_derive = "0.0.0"
 futures-preview = "0.3.0-alpha.16"
 tide = "0.2.0"
 
