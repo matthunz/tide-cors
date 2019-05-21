@@ -8,6 +8,13 @@ fn request(service: &Server<()>, req: http_service::Request) -> http_service::Re
     block_on(service.respond(&mut (), req)).unwrap()
 }
 
+fn req_origin(origin: &str) -> http_service::Request {
+    Request::builder()
+        .header(header::ORIGIN, origin)
+        .body(Body::empty())
+        .unwrap()
+}
+
 #[test]
 fn validates_origin() {
     let origin = "foo";
@@ -15,12 +22,12 @@ fn validates_origin() {
     app.middleware(Cors::default().allow_origin(&origin));
     let service = app.into_http_service();
 
-    let invalid = Request::new(Body::empty());
-    assert_eq!(403, request(&service, invalid).status());
+    let missing = Request::new(Body::empty());
+    assert_eq!(403, request(&service, missing).status());
 
-    let valid = Request::builder()
-        .header(header::ORIGIN, origin)
-        .body(Body::empty())
-        .unwrap();
-    assert_eq!(404, request(&service, valid).status());
+    let not_allowed = req_origin("bar");
+    assert_eq!(403, request(&service, not_allowed).status());
+
+    let allowed = req_origin(origin);
+    assert_eq!(404, request(&service, allowed).status());
 }
